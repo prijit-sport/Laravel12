@@ -1,14 +1,11 @@
-# TODO - เฟส 8: ตัด rate limit จาก Twelve Data quote (compare/watchlist)
+# TODO
 
-## เป้าหมาย
-- ให้หน้า /compare และ /watchlist คำนวณ "ราคาล่าสุด" และ "%เปลี่ยนแปลง" จาก DB (`stock_prices`) แทนการเรียก Twelve Data quote API
-
-## Steps
-- [x] 1) อัปเดต `app/Services/StockService.php`: เพิ่ม method `getLatestFromDb()` อ่าน 2 แถวล่าสุดแล้วคำนวณ percent change
-- [x] 2) อัปเดต `app/Http/Controllers/CompareController.php`: เรียก `getTimeSeries()` ก่อน แล้วอ่าน close/% จาก `getLatestFromDb()` (ไม่เรียก quote)
-- [x] 3) อัปเดต `app/Http/Controllers/WatchlistController.php`: ทำเช่นเดียวกับ Compare (ไม่เรียก quote)
-- [x] 4) รัน `php artisan cache:clear`
-- [ ] 5) ทดสอบ: `/stock/AVGO` เพื่อ populate DB แล้วเปิด `/compare` และ `/watchlist` และ refresh ซ้ำ (คาดว่าไม่ชน rate limit และ % คำนวณจาก DB)
-
-
-
+- [x] เพิ่ม `describeCompany()` ใน `app/Services/OllamaAnalysisService.php` (Ollama /api/chat + cache 1 วัน)
+- [x] เพิ่ม endpoint `companyInfo()` ใน `app/Http/Controllers/StockController.php` (คืน JSON)
+- [x] เพิ่ม route `GET /stock/{symbol}/company-info` ใน `routes/web.php`
+- [x] ปรับหน้า `resources/views/stock/show_phase5.blade.php`
+  - [x] เปลี่ยน header/title/subtitle ให้ทางการ
+  - [x] เพิ่มการ์ด “เกี่ยวกับบริษัท” โหลด async อัตโนมัติ
+  - [x] แสดง spinner, แสดงผล/handle error แบบสุภาพ
+  - [x] ติดป้าย disclaimer ว่าข้อมูลจาก AI เพื่อการศึกษา
+- [x] รัน `php artisan cache:clear` และทดสอบเปิด `/stock/NVDA`, `/stock/KO`, `/stock/JPM`

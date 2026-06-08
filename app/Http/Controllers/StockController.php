@@ -2,7 +2,8 @@
 
 namespace App\Http\Controllers;
 
-use App\Services\AiAnalysisService;
+use App\Services\OllamaAnalysisService;
+
 use App\Services\BacktestService;
 use App\Services\RuleBasedAnalysisService;
 use App\Services\StockService;
@@ -14,6 +15,25 @@ use Illuminate\Http\RedirectResponse;
 
 final class StockController extends Controller
 {
+    public function companyInfo(string $symbol): JsonResponse
+    {
+        $symbolOut = $this->normalizeSymbol($symbol);
+
+        $service = app(StockService::class);
+        $quote = $service->getQuote($symbolOut);
+
+        $name = $quote['name'] ?? null;
+
+        $aiService = app(OllamaAnalysisService::class);
+        $result = $aiService->describeCompany($symbolOut, $name);
+
+        return response()->json([
+            'ok' => $result['ok'],
+            'description' => $result['description'],
+            'error' => $result['error'],
+        ], 200);
+    }
+
     /**
      * @return \Illuminate\View\View|RedirectResponse
      */
@@ -35,7 +55,8 @@ final class StockController extends Controller
 
         $service = app(StockService::class);
         $indicatorService = app(TechnicalIndicatorService::class);
-        $aiService = app(AiAnalysisService::class);
+        $aiService = app(OllamaAnalysisService::class);
+
         $ruleBasedService = app(RuleBasedAnalysisService::class);
         $backtestService = app(BacktestService::class);
         

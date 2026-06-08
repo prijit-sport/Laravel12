@@ -3,7 +3,8 @@
 <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>วิเคราะห์หุ้น AI - เฟส 5</title>
+    <title>📈 วิเคราะห์หุ้นด้วย AI</title>
+
  
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
@@ -22,16 +23,17 @@
 <div class="container py-4">
     <div class="d-flex align-items-center justify-content-between mb-4">
         <div>
-            <h3 class="mb-1">
+            <h3 class="mb-1 fw-semibold">
                 <i class="bi bi-graph-up-arrow text-primary"></i>
-                วิเคราะห์หุ้น AI - เฟส 5
+                📈 วิเคราะห์หุ้นด้วย AI
             </h3>
-            <div class="text-muted">ข้อมูลจาก Twelve Data + ตัวบ่งชี้ + AI + Backtest + วิเคราะห์ไทย</div>
+            <div class="text-muted">วิเคราะห์หุ้นสหรัฐด้วยตัวชี้วัดทางเทคนิคและ AI — รองรับทุกหุ้น เพียงกรอกสัญลักษณ์</div>
         </div>
  
         <div class="text-end">
             <div class="text-muted">สัญลักษณ์</div>
             <div class="fw-semibold mb-2">{{ $symbol }}</div>
+
             <div class="d-flex gap-2">
                 <form action="/watchlist" method="POST" style="display: inline;">
                     @csrf
@@ -111,11 +113,76 @@
                 </div>
             </div>
         </div>
- 
+
         <div class="col-12 col-md-6 col-lg-4">
             <div class="card card-glow h-100">
                 <div class="card-body">
                     <div class="text-muted">ราคาล่าสุด</div>
+                    <div class="fw-semibold fs-4">
+                        @php($close = $quote['close'] ?? null)
+                        @if ($close !== null)
+                            ${{ number_format((float) $close, 2) }}
+                        @else
+                            <span class="text-muted">-</span>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
+ 
+        <div class="col-12 col-md-6 col-lg-4">
+            <div class="card card-glow h-100">
+                <div class="card-body">
+                    <div class="text-muted">เปลี่ยนแปลง</div>
+                    <div class="fw-semibold fs-4">
+                        @php($pct = $quote['percent_change'] ?? null)
+                        @if ($pct !== null)
+                            @php($isUp = (float) $pct >= 0)
+                            <span class="text-{{ $isUp ? 'success' : 'danger' }}">
+                                {{ number_format((float) $pct, 2) }}%
+                            </span>
+                        @else
+                            <span class="text-muted">-</span>
+                        @endif
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="col-12">
+            <div class="card card-glow h-100">
+                <div class="card-body">
+                    <div class="d-flex align-items-start justify-content-between flex-wrap gap-3">
+                        <div>
+                            <div class="fw-semibold">
+                                <i class="bi bi-building me-1 text-primary"></i>
+                                เกี่ยวกับบริษัท
+                            </div>
+                            <div class="text-muted small">ข้อมูลถูกสร้างโดย AI เพื่อการศึกษา</div>
+                        </div>
+                        <div class="text-end">
+                            <span id="companySourceBadge" class="badge text-bg-light border">ℹ️ AI (Ollama)</span>
+                        </div>
+                    </div>
+
+                    <div id="companyInfoStatus" class="mt-3 text-muted small">
+                        <div class="d-flex align-items-center gap-2">
+                            <div class="spinner-border spinner-border-sm text-primary" role="status" aria-hidden="true"></div>
+                            <div>กำลังโหลดข้อมูลบริษัท...</div>
+                        </div>
+                    </div>
+
+                    <div id="companyInfoContent" class="mt-3 lh-lg" style="display:none;"></div>
+
+                    <div class="mt-3 text-muted small">
+                        ℹ️ ข้อมูลบริษัทสร้างโดย AI เพื่อการศึกษา อาจไม่ครบถ้วนหรือไม่อัปเดตล่าสุด ควรตรวจสอบจากแหล่งทางการ
+                    </div>
+                </div>
+            </div>
+        </div>
+ 
+
+    <div class="row g-3 mb-4">
                     <div class="fw-semibold fs-4">
                         @php($close = $quote['close'] ?? null)
                         @if ($close !== null)
@@ -248,16 +315,16 @@
         </div>
     </div>
 
-    @if (env('ANTHROPIC_API_KEY') && env('ANTHROPIC_API_KEY') !== 'sk-ant-')
-        <div class="card card-glow mb-4">
+    <div class="card card-glow mb-4">
             <div class="card-body">
                 <div class="d-flex align-items-center justify-content-between">
                     <div>
-                        <div class="fw-semibold">บทวิเคราะห์ AI (ระดับเพิ่มเติม)</div>
-                        <div class="text-muted small">วิเคราะห์ลึกซึ้งจาก Anthropic Claude</div>
+                        <div class="fw-semibold">บทวิเคราะห์โดย AI</div>
+                        <div class="text-muted small">AI (Local) วิเคราะห์จากตัวเลขราคาและ indicator ที่คำนวณได้</div>
                     </div>
                     <div class="text-end text-muted small">
-                        <span class="badge text-bg-light border">Anthropic Claude</span>
+                        <span class="badge text-bg-light border">Ollama (qwen2)</span>
+
                     </div>
                 </div>
 
@@ -276,11 +343,10 @@
                 </div>
 
                 <div class="mt-3 text-muted small">
-                    หมายเหตุ: บทวิเคราะห์ AI เป็นข้อมูลประกอบเพื่อการศึกษา ไม่ใช่คำแนะนำการลงทุน
+                    หมายเหตุ: บทวิเคราะห์จาก AI เป็นข้อมูลประกอบเพื่อการศึกษาเท่านั้น ไม่ใช่คำแนะนำการลงทุน
                 </div>
             </div>
         </div>
-    @endif
  
     <div class="card card-glow mb-4">
         <div class="card-body">
@@ -491,6 +557,36 @@
         }
     });
  
+    async function loadCompanyInfo() {
+        const endpoint = @json(url('/stock')) + '/' + encodeURIComponent(symbol) + '/company-info';
+        const statusEl = document.getElementById('companyInfoStatus');
+        const contentEl = document.getElementById('companyInfoContent');
+        if (!statusEl || !contentEl) return;
+
+        statusEl.style.display = 'block';
+        contentEl.style.display = 'none';
+        contentEl.innerHTML = '';
+
+        try {
+            const res = await fetch(endpoint, { headers: { 'Accept': 'application/json' } });
+            const data = await res.json();
+
+            if (!data.ok || !data.description) {
+                const msg = data.error ? data.error : 'ไม่พบข้อมูลบริษัทในขณะนี้';
+                statusEl.innerHTML = '<div class="text-muted">'+ msg +'</div>';
+                return;
+            }
+
+            const text = String(data.description);
+            const html = text.split(/\r?\n/).map(line => line.trim() === '' ? '<br>' : line.replace(/</g,'<').replace(/>/g,'>')).join('<br>');
+            contentEl.innerHTML = html;
+            statusEl.style.display = 'none';
+            contentEl.style.display = 'block';
+        } catch (e) {
+            statusEl.innerHTML = '<div class="text-muted">เกิดข้อผิดพลาดระหว่างโหลดข้อมูลบริษัท โปรดลองใหม่ภายหลัง</div>';
+        }
+    }
+
     async function loadChart() {
         chartStatus.textContent = 'กำลังโหลดข้อมูลกราฟ...';
         try {
@@ -514,6 +610,7 @@
         }
     }
  
+    loadCompanyInfo();
     loadChart();
 </script>
 </body>
