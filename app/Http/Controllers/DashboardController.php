@@ -9,6 +9,7 @@ use App\Models\Watchlist;
 use App\Services\TechnicalIndicatorService;
 use Illuminate\Database\Eloquent\Collection;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
 use Illuminate\View\View;
  
 final class DashboardController extends Controller
@@ -87,8 +88,32 @@ final class DashboardController extends Controller
                 $oversoldCount++;
             }
  
-            $logoUrl    = Cache::get("logo:{$symbol}");
-            $logoUrlOut = is_string($logoUrl) ? $logoUrl : null;
+            // Fetch logo if not in cache (auto-repopulate after cache:clear)
+            $rawLogoUrl = Cache::remember(
+                "logo:{$symbol}",
+                now()->addDays(7),
+                static function () use ($symbol): string {
+                    $apiKey = (string) env('TWELVEDATA_API_KEY', '');
+                    if ($apiKey === '') {
+                        return '';
+                    }
+                    try {
+                        $res = Http::withoutVerifying()
+                            ->timeout(8)
+                            ->get('https://api.twelvedata.com/logo', [
+                                'symbol' => $symbol,
+                                'apikey' => $apiKey,
+                            ]);
+                        $data = $res->json();
+                        return (is_array($data) && isset($data['url']) && is_string($data['url']))
+                            ? $data['url']
+                            : '';
+                    } catch (\Throwable) {
+                        return '';
+                    }
+                }
+            );
+            $logoUrlOut = (is_string($rawLogoUrl) && $rawLogoUrl !== '') ? $rawLogoUrl : null;
  
             $watchlistData[$symbol] = [
                 'symbol'         => $symbol,
@@ -201,3 +226,4 @@ final class DashboardController extends Controller
         return $out;
     }
 }
+ 

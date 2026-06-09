@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
  
 use App\Services\BacktestService;
+use App\Services\CoinGeckoService;
 use App\Services\OllamaAnalysisService;
 use App\Services\RuleBasedAnalysisService;
 use App\Services\StockService;
@@ -63,6 +64,23 @@ final class StockController extends Controller
  
         $quote      = $service->getQuote($symbolOut);
         $timeSeries = $service->getTimeSeries($symbolOut, 200);
+ 
+        // ถ้า Twelve Data ล้มเหลวและ symbol เป็น crypto → ใช้ CoinGecko
+        $coinGecko = app(CoinGeckoService::class);
+        if ($coinGecko->isCrypto($symbolOut)) {
+            if (!($quote['ok'] ?? false)) {
+                $cgQuote = $coinGecko->getQuote($symbolOut);
+                if ($cgQuote['ok'] ?? false) {
+                    $quote = $cgQuote;
+                }
+            }
+            if (!($timeSeries['ok'] ?? false)) {
+                $cgChart = $coinGecko->getMarketChart($symbolOut, 200);
+                if ($cgChart['ok'] ?? false) {
+                    $timeSeries = $cgChart;
+                }
+            }
+        }
  
         $indicators = [
             'rsi14' => null,
@@ -205,11 +223,18 @@ final class StockController extends Controller
  
         $service          = app(StockService::class);
         $indicatorService = app(TechnicalIndicatorService::class);
-        $timeSeries       = $service->getTimeSeries($symbolOut, 60);
-
+        $timeSeries = $service->getTimeSeries($symbolOut, 60);
+ 
+        // ถ้า Twelve Data ล้มเหลวและ symbol เป็น crypto → ใช้ CoinGecko
+        $coinGeckoChart = app(CoinGeckoService::class);
+        if (!($timeSeries['ok'] ?? false) && $coinGeckoChart->isCrypto($symbolOut)) {
+            $cgChartData = $coinGeckoChart->getMarketChart($symbolOut, 60);
+            if ($cgChartData['ok'] ?? false) {
+                $timeSeries = $cgChartData;
+            }
+        }
+ 
         if (($timeSeries['ok'] ?? false) !== true) {
-
-
             return response()->json([
                 'ok'     => false,
                 'symbol' => $symbolOut,
@@ -231,37 +256,15 @@ final class StockController extends Controller
             $series[]  = $close;
             $closes[]  = $close;
         }
-
-        $rsiAll = $indicatorService->rsiSeries($closes, 14);
-        $macdAll = $indicatorService->macdSeries($closes);
-
-        $sma20All = $indicatorService->smaSeries($closes, 20);
-        $sma50All = $indicatorService->smaSeries($closes, 50);
-
-        $labels = array_slice($labels, -30);
-        $series = array_slice($series, -30);
-
-        $sma20 = array_slice($sma20All, -30);
-        $sma50 = array_slice($sma50All, -30);
-
-        $rsiSeries = array_slice($rsiAll, -30);
-        $macdHistogram = array_slice($macdAll['histogram'] ?? [], -30);
-        $macdLine = array_slice($macdAll['macd_line'] ?? [], -30);
-        $signalLine = array_slice($macdAll['signal_line'] ?? [], -30);
-
+ 
         return response()->json([
             'ok'     => true,
             'symbol' => $symbolOut,
             'labels' => $labels,
             'series' => $series,
-            'sma20'  => $sma20,
-            'sma50'  => $sma50,
-            'rsi_series' => $rsiSeries,
-            'macd_histogram' => $macdHistogram,
-            'macd_line' => $macdLine,
-            'signal_line' => $signalLine,
+            'sma20'  => $indicatorService->smaSeries($closes, 20),
+            'sma50'  => $indicatorService->smaSeries($closes, 50),
         ]);
-
     }
  
     private function normalizeSymbol(?string $symbol): string
@@ -298,3 +301,4 @@ final class StockController extends Controller
         return $combined !== '' ? $combined : 'Unable to fetch stock data right now.';
     }
 }
+ 
