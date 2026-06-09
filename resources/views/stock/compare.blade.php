@@ -4,31 +4,15 @@
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <title>เทียบหลายหุ้น - วิเคราะห์หุ้น AI</title>
- 
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
- 
     <style>
-        .card-glow {
-            border: 1px solid rgba(0, 0, 0, .08);
-        }
-        .quick-symbol-btn {
-            padding: 0.25rem 0.75rem;
-            font-size: 0.85rem;
-        }
-        .compare-table {
-            font-size: 0.9rem;
-        }
-        .compare-table tbody tr {
-            cursor: pointer;
-            transition: background-color 0.2s;
-        }
-        .compare-table tbody tr:hover {
-            background-color: rgba(13, 110, 253, 0.1);
-        }
-        .badge-sm {
-            font-size: 0.75rem;
-        }
+        .card-glow { border: 1px solid rgba(0, 0, 0, .08); }
+        .quick-symbol-btn { padding: 0.25rem 0.75rem; font-size: 0.85rem; }
+        .compare-table { font-size: 0.9rem; }
+        .compare-table tbody tr { cursor: pointer; transition: background-color 0.2s; }
+        .compare-table tbody tr:hover { background-color: rgba(13, 110, 253, 0.1); }
+        .badge-sm { font-size: 0.75rem; }
     </style>
 </head>
 <body class="bg-light">
@@ -41,16 +25,16 @@
             </h3>
             <div class="text-muted">เปรียบเทียบราคา, ตัวบ่งชี้, และแนวโน้มของหุ้นหลายตัวพร้อมกัน</div>
         </div>
- 
         <div class="text-end">
             <div class="d-flex gap-2">
+                <a href="{{ url('/') }}" class="btn btn-sm btn-outline-primary">
+                    <i class="bi bi-house me-1"></i>Dashboard
+                </a>
                 <a href="{{ url('/watchlist') }}" class="btn btn-sm btn-outline-info">
-                    <i class="bi bi-bookmark-star me-1"></i>
-                    รายการของฉัน
+                    <i class="bi bi-bookmark-star me-1"></i>รายการของฉัน
                 </a>
                 <a href="{{ url('/stock/NVDA') }}" class="btn btn-sm btn-outline-secondary">
-                    <i class="bi bi-arrow-left me-1"></i>
-                    กลับไปวิเคราะห์รายตัว
+                    <i class="bi bi-arrow-left me-1"></i>กลับไปวิเคราะห์รายตัว
                 </a>
             </div>
         </div>
@@ -75,19 +59,18 @@
                 </div>
                 <div class="col-12 col-md-4">
                     <button type="submit" class="btn btn-primary w-100">
-                        <i class="bi bi-search me-1"></i>
-                        เทียบ
+                        <i class="bi bi-search me-1"></i>เทียบ
                     </button>
                 </div>
             </form>
-
             <div class="mt-3">
                 <div class="text-muted small mb-2">ชุดหุ้นยอดนิยม:</div>
                 <div class="d-flex flex-wrap gap-2">
                     @foreach ([
                         ['symbols' => 'NVDA,TSM,MU,VRT,AVGO', 'label' => 'ชิป & หน่วยความจำ'],
                         ['symbols' => 'AAPL,MSFT,GOOGL,META,NVDA', 'label' => 'Big Tech'],
-                        ['symbols' => 'TSM,SAMSUNG,INTEL,QUALCOMM,BROADCOM', 'label' => 'ผู้ผลิตชิป'],
+                        ['symbols' => 'JPM,BAC,WFC,GS,MS', 'label' => 'ธนาคาร'],
+                        ['symbols' => 'XOM,CVX,COP,SLB,OXY', 'label' => 'พลังงาน'],
                     ] as $preset)
                         <a href="{{ url('/compare?symbols=' . $preset['symbols']) }}" class="btn btn-outline-secondary quick-symbol-btn">
                             {{ $preset['label'] }}
@@ -97,7 +80,7 @@
             </div>
         </div>
     </div>
-
+ 
     @if (!empty($symbols) && !empty($comparison))
         <div class="card card-glow">
             <div class="card-body">
@@ -134,19 +117,13 @@
                                         </td>
                                         <td>
                                             @php($close = $data['close'] ?? null)
-                                            @if ($close !== null)
-                                                ${{ number_format($close, 2) }}
-                                            @else
-                                                -
-                                            @endif
+                                            {{ $close !== null ? '$'.number_format($close, 2) : '-' }}
                                         </td>
                                         <td>
                                             @php($pct = $data['percent_change'] ?? null)
                                             @if ($pct !== null)
                                                 @php($isUp = $pct >= 0)
-                                                <span class="text-{{ $isUp ? 'success' : 'danger' }}">
-                                                    {{ number_format($pct, 2) }}%
-                                                </span>
+                                                <span class="text-{{ $isUp ? 'success' : 'danger' }}">{{ number_format($pct, 2) }}%</span>
                                             @else
                                                 -
                                             @endif
@@ -154,30 +131,22 @@
                                         <td>
                                             @php($rsi = $data['rsi'] ?? null)
                                             @if ($rsi !== null)
-                                                <span class="badge badge-sm bg-{{ $data['rsi_color'] ?? 'secondary' }}">
-                                                    {{ number_format($rsi, 1) }}
-                                                </span><br>
+                                                <span class="badge badge-sm bg-{{ $data['rsi_color'] ?? 'secondary' }}">{{ number_format($rsi, 1) }}</span><br>
                                                 <small>{{ $data['rsi_signal'] ?? '-' }}</small>
                                             @else
                                                 -
                                             @endif
                                         </td>
                                         <td>
-                                            @php($sma50 = $data['sma50'] ?? null)
-                                            @if ($sma50 !== null)
-                                                <span class="badge badge-sm bg-{{ $data['trend_color'] ?? 'secondary' }}">
-                                                    {{ $data['trend_signal'] ?? '-' }}
-                                                </span>
+                                            @if (($data['sma50'] ?? null) !== null)
+                                                <span class="badge badge-sm bg-{{ $data['trend_color'] ?? 'secondary' }}">{{ $data['trend_signal'] ?? '-' }}</span>
                                             @else
                                                 -
                                             @endif
                                         </td>
                                         <td>
-                                            @php($macd = $data['macd_histogram'] ?? null)
-                                            @if ($macd !== null)
-                                                <span class="badge badge-sm bg-{{ $data['macd_color'] ?? 'secondary' }}">
-                                                    {{ $data['macd_signal'] ?? '-' }}
-                                                </span>
+                                            @if (($data['macd_histogram'] ?? null) !== null)
+                                                <span class="badge badge-sm bg-{{ $data['macd_color'] ?? 'secondary' }}">{{ $data['macd_signal'] ?? '-' }}</span>
                                             @else
                                                 -
                                             @endif
@@ -191,21 +160,19 @@
                         </tbody>
                     </table>
                 </div>
-
                 <div class="mt-3 text-muted small">
                     <i class="bi bi-info-circle me-1"></i>
-                    คลิกบนแถวเพื่อดูรายละเอียดเต็มของหุ้นนั้น | ข้อมูลจาก Twelve Data | Cache 10 นาที
+                    คลิกบนแถวเพื่อดูรายละเอียดเต็ม | ข้อมูลจาก Twelve Data | Cache 10 นาที
                 </div>
             </div>
         </div>
     @endif
-
+ 
     <div class="mt-4 p-3 bg-white rounded border">
         <div class="small text-muted">
-            <strong>หมายเหตุ:</strong> ข้อมูลและการวิเคราะห์เป็นเพียงข้อมูลประกอบการศึกษา ไม่ใช่คำแนะนำการลงทุน ผู้ใช้ควรทำการศึกษาวิจัยเพิ่มเติมและปรึกษาผู้เชี่ยวชาญก่อนตัดสินใจลงทุน
+            <strong>หมายเหตุ:</strong> ข้อมูลและการวิเคราะห์เป็นเพียงข้อมูลประกอบการศึกษา ไม่ใช่คำแนะนำการลงทุน
         </div>
     </div>
- 
 </div>
 </body>
 </html>

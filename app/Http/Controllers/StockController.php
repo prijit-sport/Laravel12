@@ -1,116 +1,115 @@
 <?php
-
+ 
 namespace App\Http\Controllers;
-
-use App\Services\OllamaAnalysisService;
-
+ 
 use App\Services\BacktestService;
+use App\Services\OllamaAnalysisService;
 use App\Services\RuleBasedAnalysisService;
 use App\Services\StockService;
 use App\Services\TechnicalIndicatorService;
 use Illuminate\Http\JsonResponse;
-use Illuminate\Http\Request;
-use Illuminate\Support\Facades\View;
 use Illuminate\Http\RedirectResponse;
-
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\Http;
+use Illuminate\Support\Facades\View;
+ 
 final class StockController extends Controller
 {
     public function companyInfo(string $symbol): JsonResponse
     {
         $symbolOut = $this->normalizeSymbol($symbol);
-
+ 
         $service = app(StockService::class);
         $quote = $service->getQuote($symbolOut);
-
+ 
         $name = $quote['name'] ?? null;
-
+ 
         $aiService = app(OllamaAnalysisService::class);
         $result = $aiService->describeCompany($symbolOut, $name);
-
+ 
         return response()->json([
-            'ok' => $result['ok'],
+            'ok'          => $result['ok'],
             'description' => $result['description'],
-            'error' => $result['error'],
+            'error'       => $result['error'],
         ], 200);
     }
-
+ 
     /**
      * @return \Illuminate\View\View|RedirectResponse
      */
     public function show(Request $request, ?string $symbol = null): \Illuminate\View\View|RedirectResponse
     {
-        // ----------------------------------------------------------------------
-        // ส่วนที่เพิ่มใหม่: ดักจับการค้นหาจากฟอร์มหน้าเว็บ
-        // ถ้ามี ?symbol= ส่งมา และไม่ตรงกับ Path ปัจจุบัน ให้ Redirect ไปที่ Path ที่ถูกต้อง
-        // ----------------------------------------------------------------------
+        // ดักจับการค้นหาจากฟอร์มหน้าเว็บ
         if ($request->has('symbol') && $request->input('symbol') !== $symbol) {
             $inputSymbol = $this->normalizeSymbol($request->input('symbol'));
             $strategy = $request->query('strategy', 'sma_cross');
-            
+ 
             return redirect('/stock/' . $inputSymbol . '?strategy=' . $strategy);
         }
-        // ----------------------------------------------------------------------
-
+ 
         $symbolOut = $this->normalizeSymbol($symbol ?? 'NVDA');
-
-        $service = app(StockService::class);
+ 
+        $service          = app(StockService::class);
         $indicatorService = app(TechnicalIndicatorService::class);
-        $aiService = app(OllamaAnalysisService::class);
-
+        $aiService        = app(OllamaAnalysisService::class);
         $ruleBasedService = app(RuleBasedAnalysisService::class);
-        $backtestService = app(BacktestService::class);
-        
+        $backtestService  = app(BacktestService::class);
+ 
         $strategy = strtolower(trim((string) $request->query('strategy', 'sma_cross')));
         if (! in_array($strategy, ['rsi', 'sma_cross', 'macd'], true)) {
             $strategy = 'sma_cross';
         }
-
-        $quote = $service->getQuote($symbolOut);
+ 
+        $quote      = $service->getQuote($symbolOut);
         $timeSeries = $service->getTimeSeries($symbolOut, 200);
-
+ 
         $indicators = [
             'rsi14' => null,
             'sma20' => null,
             'sma50' => null,
-            'macd' => [
-                'macd' => null,
-                'signal' => null,
+            'macd'  => [
+                'macd'      => null,
+                'signal'    => null,
                 'histogram' => null,
             ],
             'signals' => [
-                'rsi' => ['label' => 'Neutral', 'color' => 'secondary'],
-                'sma50' => ['label' => '-', 'color' => 'secondary'],
+                'rsi'  => ['label' => 'Neutral', 'color' => 'secondary'],
+                'sma50' => ['label' => '-',       'color' => 'secondary'],
                 'macd' => ['label' => 'Neutral', 'color' => 'secondary'],
             ],
         ];
-
+ 
         $backtestResult = [
-            'ok' => false,
-            'strategy' => $strategy,
+            'ok'                  => false,
+            'strategy'            => $strategy,
             'strategy_return_pct' => null,
             'buy_hold_return_pct' => null,
-            'num_trades' => 0,
-            'win_rate' => null,
-            'final_value' => null,
-            'trades' => [],
-            'error' => 'Unable to run backtest because historical series was not available.',
+            'num_trades'          => 0,
+            'win_rate'            => null,
+            'final_value'         => null,
+            'trades'              => [],
+            'error'               => 'Unable to run backtest because historical series was not available.',
         ];
-
+ 
         $ruleBasedAnalysis = [
-            'ok' => false,
+            'ok'      => false,
             'summary' => '',
-            'points' => [],
-            'error' => 'ไม่มีข้อมูลเพียงพอสำหรับวิเคราะห์',
+            'points'  => [],
+            'error'   => 'ไม่มีข้อมูลเพียงพอสำหรับวิเคราะห์',
         ];
-
+ 
         if (($timeSeries['ok'] ?? false) === true) {
-            $closes = array_map(static fn (array $row): float => (float) ($row['close'] ?? 0.0), $timeSeries['values']);
-
+            $closes = array_map(
+                static fn (array $row): float => (float) ($row['close'] ?? 0.0),
+                $timeSeries['values']
+            );
+ 
             $indicators['rsi14'] = $indicatorService->rsi($closes, 14);
             $indicators['sma20'] = $indicatorService->sma($closes, 20);
             $indicators['sma50'] = $indicatorService->sma($closes, 50);
-            $indicators['macd'] = $indicatorService->macd($closes);
-
+            $indicators['macd']  = $indicatorService->macd($closes);
+ 
             $rsiValue = $indicators['rsi14'];
             if ($rsiValue !== null) {
                 if ($rsiValue > 70.0) {
@@ -119,7 +118,7 @@ final class StockController extends Controller
                     $indicators['signals']['rsi'] = ['label' => 'Oversold', 'color' => 'success'];
                 }
             }
-
+ 
             $latestClose = $closes[count($closes) - 1] ?? null;
             if ($latestClose !== null && $indicators['sma50'] !== null) {
                 if ($latestClose > $indicators['sma50']) {
@@ -130,7 +129,7 @@ final class StockController extends Controller
                     $indicators['signals']['sma50'] = ['label' => 'Sideways', 'color' => 'secondary'];
                 }
             }
-
+ 
             $histogram = $indicators['macd']['histogram'];
             if ($histogram !== null) {
                 if ($histogram > 0.0) {
@@ -139,89 +138,140 @@ final class StockController extends Controller
                     $indicators['signals']['macd'] = ['label' => 'Bearish', 'color' => 'danger'];
                 }
             }
-
+ 
             $backtestResult = $backtestService->run($timeSeries['values'], $strategy);
         }
-
+ 
         $stockData = [
-            'symbol' => $symbolOut,
-            'name' => $quote['name'] ?? null,
-            'close' => $quote['close'] ?? null,
-            'percent_change' => $quote['percent_change'] ?? null,
-            'rsi' => $indicators['rsi14'],
-            'sma20' => $indicators['sma20'],
-            'sma50' => $indicators['sma50'],
-            'macd_histogram' => $indicators['macd']['histogram'] ?? null,
-            'rsi_signal' => $indicators['signals']['rsi']['label'] ?? 'Neutral',
-            'trend_signal' => $indicators['signals']['sma50']['label'] ?? '-',
-            'macd_signal' => $indicators['signals']['macd']['label'] ?? 'Neutral',
+            'symbol'          => $symbolOut,
+            'name'            => $quote['name'] ?? null,
+            'close'           => $quote['close'] ?? null,
+            'percent_change'  => $quote['percent_change'] ?? null,
+            'rsi'             => $indicators['rsi14'],
+            'sma20'           => $indicators['sma20'],
+            'sma50'           => $indicators['sma50'],
+            'macd_histogram'  => $indicators['macd']['histogram'] ?? null,
+            'rsi_signal'      => $indicators['signals']['rsi']['label'] ?? 'Neutral',
+            'trend_signal'    => $indicators['signals']['sma50']['label'] ?? '-',
+            'macd_signal'     => $indicators['signals']['macd']['label'] ?? 'Neutral',
         ];
-
-        $aiAnalysis = $aiService->analyze($stockData);
+ 
+        $aiAnalysis        = $aiService->analyze($stockData);
         $ruleBasedAnalysis = $ruleBasedService->analyze($stockData);
-
-        return View::make('stock.show_phase5', [
-            'symbol' => $symbolOut,
-            'quote' => $quote,
-            'timeSeries' => $timeSeries,
-            'indicators' => $indicators,
-            'aiAnalysis' => $aiAnalysis,
+ 
+        // ดึง URL โลโก้จาก Twelve Data (server-side, cache 7 วัน)
+        $logoUrl = Cache::remember(
+            "logo:{$symbolOut}",
+            now()->addDays(7),
+            static function () use ($symbolOut): string {
+                $apiKey = (string) env('TWELVEDATA_API_KEY', '');
+                if ($apiKey === '') {
+                    return '';
+                }
+                try {
+                    $res = Http::withoutVerifying()
+                        ->timeout(8)
+                        ->get('https://api.twelvedata.com/logo', [
+                            'symbol' => $symbolOut,
+                            'apikey' => $apiKey,
+                        ]);
+                    $data = $res->json();
+                    return (is_array($data) && isset($data['url']) && is_string($data['url']))
+                        ? $data['url']
+                        : '';
+                } catch (\Throwable) {
+                    return '';
+                }
+            }
+        );
+ 
+        return View::make('stock.show', [
+            'symbol'            => $symbolOut,
+            'quote'             => $quote,
+            'timeSeries'        => $timeSeries,
+            'indicators'        => $indicators,
+            'aiAnalysis'        => $aiAnalysis,
             'ruleBasedAnalysis' => $ruleBasedAnalysis,
-            'errorMessage' => $this->buildFriendlyError($quote, $timeSeries),
-            'strategy' => $strategy,
-            'backtestResult' => $backtestResult,
+            'errorMessage'      => $this->buildFriendlyError($quote, $timeSeries),
+            'strategy'          => $strategy,
+            'backtestResult'    => $backtestResult,
+            'logoUrl'           => $logoUrl,
         ]);
     }
-
+ 
     public function chartData(string $symbol): JsonResponse
     {
         $symbolOut = $this->normalizeSymbol($symbol);
-
-        $service = app(StockService::class);
+ 
+        $service          = app(StockService::class);
         $indicatorService = app(TechnicalIndicatorService::class);
-        $timeSeries = $service->getTimeSeries($symbolOut, 30);
+        $timeSeries       = $service->getTimeSeries($symbolOut, 60);
 
         if (($timeSeries['ok'] ?? false) !== true) {
+
+
             return response()->json([
-                'ok' => false,
+                'ok'     => false,
                 'symbol' => $symbolOut,
-                'error' => (string) ($timeSeries['error'] ?? 'Unable to fetch chart data.'),
+                'error'  => (string) ($timeSeries['error'] ?? 'Unable to fetch chart data.'),
                 'labels' => [],
                 'series' => [],
-                'sma20' => [],
-                'sma50' => [],
+                'sma20'  => [],
+                'sma50'  => [],
             ], 200);
         }
-
+ 
         $labels = [];
         $series = [];
         $closes = [];
-
+ 
         foreach (($timeSeries['values'] ?? []) as $row) {
             $labels[] = (string) ($row['datetime'] ?? '');
-            $close = (float) ($row['close'] ?? 0);
-            $series[] = $close;
-            $closes[] = $close;
+            $close     = (float) ($row['close'] ?? 0);
+            $series[]  = $close;
+            $closes[]  = $close;
         }
 
+        $rsiAll = $indicatorService->rsiSeries($closes, 14);
+        $macdAll = $indicatorService->macdSeries($closes);
+
+        $sma20All = $indicatorService->smaSeries($closes, 20);
+        $sma50All = $indicatorService->smaSeries($closes, 50);
+
+        $labels = array_slice($labels, -30);
+        $series = array_slice($series, -30);
+
+        $sma20 = array_slice($sma20All, -30);
+        $sma50 = array_slice($sma50All, -30);
+
+        $rsiSeries = array_slice($rsiAll, -30);
+        $macdHistogram = array_slice($macdAll['histogram'] ?? [], -30);
+        $macdLine = array_slice($macdAll['macd_line'] ?? [], -30);
+        $signalLine = array_slice($macdAll['signal_line'] ?? [], -30);
+
         return response()->json([
-            'ok' => true,
+            'ok'     => true,
             'symbol' => $symbolOut,
             'labels' => $labels,
             'series' => $series,
-            'sma20' => $indicatorService->smaSeries($closes, 20),
-            'sma50' => $indicatorService->smaSeries($closes, 50),
+            'sma20'  => $sma20,
+            'sma50'  => $sma50,
+            'rsi_series' => $rsiSeries,
+            'macd_histogram' => $macdHistogram,
+            'macd_line' => $macdLine,
+            'signal_line' => $signalLine,
         ]);
-    }
 
+    }
+ 
     private function normalizeSymbol(?string $symbol): string
     {
         $value = strtoupper((string) ($symbol ?? 'NVDA'));
         $value = preg_replace('/[^A-Z0-9._-]/', '', $value);
-
+ 
         return $value !== '' ? $value : 'NVDA';
     }
-
+ 
     /**
      * @param array{ok: bool, error: ?string} $quote
      * @param array{ok: bool, error: ?string} $timeSeries
@@ -229,29 +279,22 @@ final class StockController extends Controller
     private function buildFriendlyError(array $quote, array $timeSeries): ?string
     {
         $quoteOk = ($quote['ok'] ?? false) === true;
-        $timeOk = ($timeSeries['ok'] ?? false) === true;
-
+        $timeOk  = ($timeSeries['ok'] ?? false) === true;
+ 
         if ($quoteOk && $timeOk) {
             return null;
         }
-
-        $quoteErr = (string) ($quote['error'] ?? '');
-        $seriesErr = (string) ($timeSeries['error'] ?? '');
-
+ 
         $messages = [];
-        if (! $quoteOk && $quoteErr !== '') {
-            $messages[] = 'Quote: ' . $quoteErr;
+        if (! $quoteOk && ($quote['error'] ?? '') !== '') {
+            $messages[] = 'Quote: ' . $quote['error'];
         }
-        if (! $timeOk && $seriesErr !== '') {
-            $messages[] = 'Chart: ' . $seriesErr;
+        if (! $timeOk && ($timeSeries['error'] ?? '') !== '') {
+            $messages[] = 'Chart: ' . $timeSeries['error'];
         }
-
+ 
         $combined = implode(' ', $messages);
-
-        if ($combined === '') {
-            $combined = 'Unable to fetch stock data right now.';
-        }
-
-        return $combined;
+ 
+        return $combined !== '' ? $combined : 'Unable to fetch stock data right now.';
     }
 }

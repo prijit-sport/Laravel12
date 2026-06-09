@@ -6,10 +6,13 @@ use App\Http\Controllers\StockController;
 use App\Http\Controllers\WatchlistController;
 use App\Http\Controllers\AiController; // 1. เพิ่มการเรียกใช้งาน AiController
 
-Route::get('/', function () {
-    return redirect('/stock/NVDA');
-});
+use App\Http\Controllers\DashboardController;
+
+Route::get('/', [DashboardController::class, 'index']);
+
+
 Route::get('/stock/{symbol?}', [StockController::class, 'show']);
+
 
 Route::get('/stock/{symbol}/chart-data', [StockController::class, 'chartData']);
 Route::get('/stock/{symbol}/company-info', [StockController::class, 'companyInfo']);
