@@ -11,6 +11,10 @@ final class OllamaAnalysisService
 {
     private const CACHE_TTL_SECONDS = 60 * 60;
     private const COMPANY_CACHE_TTL_SECONDS = 60 * 1440;
+
+    private const GROQ_ENDPOINT = 'https://api.groq.com/openai/v1/chat/completions';
+    private const GROQ_MODEL = 'llama3-8b-8192';
+
  
     /**
      * Analyze stock technical data using Ollama LLM.
@@ -22,10 +26,17 @@ final class OllamaAnalysisService
     {
         $baseUrl = (string) env('OLLAMA_BASE_URL', 'http://localhost:11434');
         $model   = (string) env('OLLAMA_MODEL', 'qwen2');
- 
+
+        $groqKey = (string) env('GROQ_API_KEY', '');
+
         $symbol       = strtoupper((string) ($data['symbol'] ?? ''));
+
         $symbolForKey = $symbol !== '' ? $symbol : 'UNKNOWN';
-        $url          = rtrim($baseUrl, '/') . '/api/chat';
+        $url          = self::GROQ_ENDPOINT;
+
+        if ($groqKey === '') {
+            return ['ok' => false, 'analysis' => null, 'error' => 'Missing GROQ_API_KEY.'];
+        }
  
         if ($symbol === '') {
             return ['ok' => false, 'analysis' => null, 'error' => 'Missing stock symbol.'];
@@ -48,15 +59,21 @@ final class OllamaAnalysisService
                 $systemPrompt = 'คุณเป็นผู้ให้ความรู้ด้านการลงทุน อธิบาย "สัญญาณที่ตีความแล้ว" เป็นภาษาไทยที่เข้าใจง่ายและกระชับ ห้ามแนะนำให้ซื้อหรือขาย อ้างอิงเฉพาะตัวเลขที่ให้มาเท่านั้น และปิดท้ายด้วยข้อความเตือนสั้น ๆ ว่าเป็นข้อมูลเพื่อการศึกษา';
                 $userMessage  = $this->buildUserMessage($data);
  
-                $response = Http::timeout(180)->post($url, [
-                    'model'   => $model,
-                    'stream'  => false,
-                    'messages' => [
-                        ['role' => 'system', 'content' => $systemPrompt],
-                        ['role' => 'user',   'content' => $userMessage],
-                    ],
-                    'options' => ['temperature' => 0.3, 'num_predict' => 350],
-                ]);
+                $response = Http::withoutVerifying()
+                    ->timeout(30)
+                    ->withHeaders([
+                        'Authorization' => 'Bearer ' . $groqKey,
+                        'Content-Type'  => 'application/json',
+                    ])
+                    ->post($url, [
+                        'model'       => self::GROQ_MODEL,
+                        'messages'    => [
+                            ['role' => 'user', 'content' => $systemPrompt . "\n\n" . $userMessage],
+                        ],
+                        'temperature' => 0.7,
+                        'max_tokens'  => 1024,
+                    ]);
+
  
                 if ($response->failed()) {
                     $status    = $response->status();
@@ -72,6 +89,12 @@ final class OllamaAnalysisService
  
                 $payload  = $response->json();
                 $analysis = is_array($payload) ? $this->extractText($payload) : null;
+
+                if (!is_string($analysis) || trim($analysis) === '') {
+                    $fallback = is_array($payload) ? ($payload['choices'][0]['message']['content'] ?? null) : null;
+                    $analysis = is_string($fallback) ? $fallback : null;
+                }
+
  
                 if ($analysis === null || trim($analysis) === '') {
                     return ['ok' => false, 'analysis' => null, 'error' => 'ไม่ได้รับคำตอบจาก Ollama'];
@@ -104,13 +127,23 @@ final class OllamaAnalysisService
         $baseUrl   = (string) env('OLLAMA_BASE_URL', 'http://localhost:11434');
         $model     = (string) env('OLLAMA_MODEL', 'qwen2');
         $symbolOut = strtoupper(trim($symbol));
+
+        $groqKey = (string) env('GROQ_API_KEY', '');
+
+        if ($groqKey === '') {
+            return ['ok' => false, 'description' => null, 'error' => 'Missing GROQ_API_KEY.'];
+        }
+
+        $url = self::GROQ_ENDPOINT;
+
+
  
         if ($symbolOut === '') {
             return ['ok' => false, 'description' => null, 'error' => 'Missing stock symbol.'];
         }
- 
-        $url      = rtrim($baseUrl, '/') . '/api/chat';
+
         $cacheKey = sprintf('ollama:company:%s:%s', $model, $symbolOut);
+
  
         return Cache::remember($cacheKey, self::COMPANY_CACHE_TTL_SECONDS, function () use ($url, $model, $symbolOut, $name): array {
             try {
@@ -118,15 +151,21 @@ final class OllamaAnalysisService
                 $companyName  = ($name !== null && trim($name) !== '') ? trim($name) : $symbolOut;
                 $userMessage  = sprintf('บริษัท %s (สัญลักษณ์ %s) ทำธุรกิจเกี่ยวกับอะไร', $companyName, $symbolOut);
  
-                $response = Http::timeout(180)->post($url, [
-                    'model'   => $model,
-                    'stream'  => false,
-                    'messages' => [
-                        ['role' => 'system', 'content' => $systemPrompt],
-                        ['role' => 'user',   'content' => $userMessage],
-                    ],
-                    'options' => ['temperature' => 0.3, 'num_predict' => 200],
-                ]);
+                $response = Http::withoutVerifying()
+                    ->timeout(30)
+                    ->withHeaders([
+                        'Authorization' => 'Bearer ' . $groqKey,
+                        'Content-Type'  => 'application/json',
+                    ])
+                    ->post(self::GROQ_ENDPOINT, [
+                        'model'       => self::GROQ_MODEL,
+                        'messages'    => [
+                            ['role' => 'user', 'content' => $systemPrompt . "\n\n" . $userMessage],
+                        ],
+                        'temperature' => 0.7,
+                        'max_tokens'  => 1024,
+                    ]);
+
  
                 if ($response->failed()) {
                     return ['ok' => false, 'description' => null,
